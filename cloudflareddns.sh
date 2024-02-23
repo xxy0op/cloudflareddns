@@ -66,7 +66,7 @@ while [ -z "$CFZONE_NAME" ]; do
 done
 
 # 循环直到用户提供有效的主机名
-while [ -z "$CFCFRECORD_NAME" ]; do
+while [ -z "$CFRECORD_NAME" ]; do
   read -p "缺少主机名，请提供 Cloudflare 主机名: " CFCFRECORD_NAME
 done
 
