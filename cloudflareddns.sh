@@ -6,14 +6,6 @@ set -o pipefail
 # Automatically update your CloudFlare DNS record to the IP, Dynamic DNS
 # Can retrieve cloudflare Domain id and list zone's, because, lazy
 
-# Place at:
-# curl https://raw.githubusercontent.com/yulewang/cloudflare-api-v4-ddns/master/cf-v4-ddns.sh > /usr/local/bin/cf-ddns.sh && chmod +x /usr/local/bin/cf-ddns.sh
-# run `crontab -e` and add next line:
-# */1 * * * * /usr/local/bin/cf-ddns.sh >/dev/null 2>&1
-# or you need log:
-# */1 * * * * /usr/local/bin/cf-ddns.sh >> /var/log/cf-ddns.log 2>&1
-
-
 # Usage:
 # cf-ddns.sh -k cloudflare-api-key \
 #            -u user@example.com \
@@ -60,6 +52,25 @@ else
   exit 2
 fi
 
+# Function to start the cron job
+start_cron_job() {
+  # Check if the cron job already exists
+  if crontab -l | grep -q "*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1"; then
+    echo "Cron job is already running."
+  else
+    # Add the cron job
+    (crontab -l ; echo "*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1") | crontab -
+    echo "Cron job started."
+  fi
+}
+
+# Function to stop the cron job
+stop_cron_job() {
+  # Remove the cron job
+  (crontab -l | grep -v "/root/cloudflareddns.sh >/dev/null 2>&1") | crontab -
+  echo "Cron job stopped."
+}
+
 # Display menu and get user input
 echo "请选择要修改的选项:"
 echo "1. 修改 Cloudflare API Key"
@@ -68,7 +79,8 @@ echo "3. 修改区域名"
 echo "4. 修改主机名"
 echo "5. 修改记录类型"
 echo "6. 修改是否强制更新标志"
-read -p "请输入选项数字(1-6): " choice
+echo "7. 启动/停止定时任务"
+read -p "请输入选项数字(1-7): " choice
 
 # 根据用户的选择进行相应的操作
 case $choice in
@@ -78,7 +90,18 @@ case $choice in
   4) read -p "请输入主机名: " CFRECORD_NAME ;;
   5) read -p "请输入记录类型 (A 或 AAAA): " CFRECORD_TYPE ;;
   6) read -p "请输入是否强制更新标志 (true 或 false): " FORCE ;;
-  *) echo "无效的选项，请输入 1-6 之间的数字" ;;
+  7)
+    echo "请选择操作:"
+    echo "1. 启动定时任务"
+    echo "2. 停止定时任务"
+    read -p "请输入选项数字(1-2): " cron_option
+    case $cron_option in
+      1) start_cron_job ;;
+      2) stop_cron_job ;;
+      *) echo "无效的选项，请输入 1 或 2" ;;
+    esac
+    ;;
+  *) echo "无效的选项，请输入 1-7 之间的数字" ;;
 esac
 
 # 如果有必填项为空，退出脚本
@@ -146,9 +169,7 @@ RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CFZONE_ID
 if [ "$RESPONSE" != "${RESPONSE%success*}" ] && [ "$(echo $RESPONSE | grep "\"success\":true")" != "" ]; then
   echo "更新成功！"
   echo $WAN_IP > $WAN_IP_FILE
-  exit
 else
   echo '出错了 :('
   echo "响应: $RESPONSE"
-  exit 1
 fi
