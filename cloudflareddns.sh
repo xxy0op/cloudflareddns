@@ -62,12 +62,12 @@ done
 
 # 循环直到用户提供有效的区域名
 while [ -z "$CFZONE_NAME" ]; do
-  read -p "缺少区域名，请提供 Cloudflare 区域名: " CFUSER
+  read -p "缺少区域名，请提供 Cloudflare 区域名: " CFZONE_NAME
 done
 
 # 循环直到用户提供有效的主机名
 while [ -z "$CFCFRECORD_NAME" ]; do
-  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFUSER
+  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFCFRECORD_NAME
 done
 
 # 如果主机名不是完全合格域名（FQDN）
