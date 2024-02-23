@@ -50,19 +50,25 @@ while true; do
   esac
 done
 
-# 如果有必填项为空，退出脚本
-if [ "$CFKEY" = "" ]; then
-  echo "缺少 API Key，请提供 Cloudflare API Key"
-  exit 2
-fi
-if [ "$CFUSER" = "" ]; then
-  echo "缺少用户名，请提供 Cloudflare 用户名"
-  exit 2
-fi
-if [ "$CFRECORD_NAME" = "" ]; then 
-  echo "缺少主机名，请提供主机名"
-  exit 2
-fi
+# 循环直到用户提供有效的 API Key
+while [ -z "$CFKEY" ]; do
+  read -p "缺少 API Key，请提供 Cloudflare API Key: " CFKEY
+done
+
+# 循环直到用户提供有效的用户名
+while [ -z "$CFUSER" ]; do
+  read -p "缺少用户名，请提供 Cloudflare 用户名: " CFUSER
+done
+
+# 循环直到用户提供有效的区域名
+while [ -z "$CFZONE_NAME" ]; do
+  read -p "缺少区域名，请提供 Cloudflare 区域名: " CFUSER
+done
+
+# 循环直到用户提供有效的主机名
+while [ -z "$CFCFRECORD_NAME" ]; do
+  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFUSER
+done
 
 # 如果主机名不是完全合格域名（FQDN）
 if [ "$CFRECORD_NAME" != "$CFZONE_NAME" ] && ! [ -z "${CFRECORD_NAME##*$CFZONE_NAME}" ]; then
@@ -79,7 +85,31 @@ if [ "$START_CRON" = true ]; then
   # 添加定时任务
   (crontab -l ; echo "*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1") | crontab -
   echo "定时任务已启动"
+
+  # 显示用户输入的所有参数
+  echo "您输入的参数如下："
+  echo "Cloudflare API Key: $CFKEY"
+  echo "Cloudflare 用户名: $CFUSER"
+  echo "区域名: $CFZONE_NAME"
+  echo "主机名: $CFRECORD_NAME"
+  echo "记录类型: $CFRECORD_TYPE"
+  echo "是否强制更新标志: $FORCE"
+
+  # 提供选项给用户选择执行脚本或修改参数
+  while true; do
+    echo "请选择操作:"
+    echo "1. 运行脚本"
+    echo "2. 修改参数"
+    read -p "请输入选项数字(1-2): " option
+
+    case $option in
+      1) /root/cloudflareddns.sh ;;  # 运行脚本
+      2) break ;;  # 跳出循环以继续修改参数
+      *) echo "无效的选项，请输入 1 或 2" ;;
+    esac
+  done
 fi
+
 
 # 获取当前和旧的 WAN IP
 WAN_IP=$(curl -s ${WANIPSITE})
