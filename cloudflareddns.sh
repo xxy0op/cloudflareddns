@@ -24,7 +24,6 @@ else
   exit 2
 fi
 
-# 开始循环以接收参数
 while true; do
   # 显示菜单选项并提示用户输入选项
   echo "请选择要修改的选项:"
@@ -67,7 +66,10 @@ done
 
 # 循环直到用户提供有效的主机名
 while [ -z "$CFRECORD_NAME" ]; do
-  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFCFRECORD_NAME
+  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFRECORD_NAME
+
+  # 添加break语句来退出循环
+  [ -n "$CFRECORD_NAME" ] && break
 done
 
 # 如果主机名不是完全合格域名（FQDN）
@@ -103,8 +105,8 @@ if [ "$START_CRON" = true ]; then
     read -p "请输入选项数字(1-2): " option
 
     case $option in
-      1) /root/cloudflareddns.sh ;;  # 运行脚本
-      2) break ;;  # 跳出循环以继续修改参数
+      1) break ;;  # 跳出循环以继续运行脚本
+      2) START_CRON=false; break ;;  # 重置START_CRON为false，跳出循环以继续修改参数
       *) echo "无效的选项，请输入 1 或 2" ;;
     esac
   done
