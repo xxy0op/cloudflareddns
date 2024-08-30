@@ -24,28 +24,38 @@ else
   exit 2
 fi
 
-while true; do
-  # 显示菜单选项并提示用户输入选项
-  echo "请选择要修改的选项:"
-  echo "1. 修改 Cloudflare API Key"
-  echo "2. 修改 Cloudflare 用户名"
-  echo "3. 修改区域名"
-  echo "4. 修改主机名"
-  echo "5. 修改记录类型"
-  echo "6. 修改是否强制更新标志"
-  echo "7. 启动脚本并开始定时任务"
-  read -p "请输入选项数字(1-7): " choice
-
-  # 根据用户的选择进行相应的操作
-  case $choice in
-    1) read -p "请输入 Cloudflare API Key: " CFKEY ;;
-    2) read -p "请输入 Cloudflare 用户名: " CFUSER ;;
-    3) read -p "请输入区域名: " CFZONE_NAME ;;
-    4) read -p "请输入主机名: " CFRECORD_NAME ;;
-    5) read -p "请输入记录类型 (A 或 AAAA): " CFRECORD_TYPE ;;
-    6) read -p "请输入是否强制更新标志 (true 或 false): " FORCE ;;
+# 自动修改所有选项
+for i in {1..7}; do
+  case $i in
+    1) 
+        echo "填写 Cloudflare API Key，例如: ad2a20e538d805d661c09db437607697763df"
+        read -p "请输入 Cloudflare API Key: " CFKEY 
+        ;;
+    2) 
+        echo "填写 Cloudflare 用户名，例如: example@gmail.com"
+        read -p "请输入 Cloudflare 用户名: " CFUSER 
+        ;;
+    3) 
+        echo "填写区域名，例如: example.com"
+        read -p "请输入区域名: " CFZONE_NAME 
+        ;;
+    4) 
+        echo "填写主机名，例如: www.example.com"
+        read -p "请输入主机名: " CFRECORD_NAME 
+        ;;
+    5) 
+        echo "填写记录类型，A 用于 IPv4 或 AAAA 用于 IPv6"
+        read -p "请输入记录类型 (A 或 AAAA): " CFRECORD_TYPE
+        if [ "$CFRECORD_TYPE" != "A" ] && [ "$CFRECORD_TYPE" != "AAAA" ]; then
+            echo "无效的记录类型，请输入 A 或 AAAA"
+            i=$((i-1))  # 无效输入，重新输入
+        fi
+        ;;
+    6) 
+        echo "填写是否强制更新标志，true 或 false"
+        read -p "请输入是否强制更新标志 (true 或 false): " FORCE 
+        ;;
     7) START_CRON=true; break ;; # 跳出循环以开始脚本和定时任务
-    *) echo "无效的选项，请输入 1-7 之间的数字" ;;
   esac
 done
 
@@ -67,9 +77,6 @@ done
 # 循环直到用户提供有效的主机名
 while [ -z "$CFRECORD_NAME" ]; do
   read -p "缺少主机名，请提供 Cloudflare 主机名: " CFRECORD_NAME
-
-  # 添加break语句来退出循环
-  [ -n "$CFRECORD_NAME" ] && break
 done
 
 # 如果主机名不是完全合格域名（FQDN）
@@ -111,7 +118,6 @@ if [ "$START_CRON" = true ]; then
     esac
   done
 fi
-
 
 # 获取当前和旧的 WAN IP
 WAN_IP=$(curl -s ${WANIPSITE})
