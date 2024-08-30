@@ -28,7 +28,7 @@ fi
 for i in {1..7}; do
   case $i in
     1) 
-        echo "填写 Cloudflare API Key，例如: ad2a20e538d805d661c09db437607697763df"
+        echo "填写 Cloudflare API Key，例如: ad2a20e538dxxxxxxxxxx"
         read -p "请输入 Cloudflare API Key: " CFKEY 
         ;;
     2) 
