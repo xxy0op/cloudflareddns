@@ -3,6 +3,16 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# 自动安装 cron（仅适用于 Debian/Ubuntu 系统）
+if ! command -v crontab &> /dev/null; then
+    echo "cron 未安装，正在安装..."
+    sudo apt update
+    sudo apt install -y cron
+    sudo systemctl start cron
+    sudo systemctl enable cron
+    echo "cron 安装完成。"
+fi
+
 # 默认配置
 CFKEY=
 CFUSER=
@@ -44,16 +54,18 @@ for i in {1..7}; do
         read -p "请输入主机名: " CFRECORD_NAME 
         ;;
     5) 
-        echo "填写记录类型，A 用于 IPv4 或 AAAA 用于 IPv6"
-        read -p "请输入记录类型 (A 或 AAAA): " CFRECORD_TYPE
+        echo "填写记录类型，A 用于 IPv4 或 AAAA 用于 IPv6（默认: A）"
+        read -p "请输入记录类型 (A 或 AAAA，直接按回车选择默认值 A): " CFRECORD_TYPE
+        CFRECORD_TYPE=${CFRECORD_TYPE:-A}
         if [ "$CFRECORD_TYPE" != "A" ] && [ "$CFRECORD_TYPE" != "AAAA" ]; then
             echo "无效的记录类型，请输入 A 或 AAAA"
             i=$((i-1))  # 无效输入，重新输入
         fi
         ;;
     6) 
-        echo "填写是否强制更新标志，true 或 false"
-        read -p "请输入是否强制更新标志 (true 或 false): " FORCE 
+        echo "填写是否强制更新标志，true 或 false（默认: false）"
+        read -p "请输入是否强制更新标志 (true 或 false，直接按回车选择默认值 false): " FORCE
+        FORCE=${FORCE:-false}
         ;;
     7) START_CRON=true; break ;; # 跳出循环以开始脚本和定时任务
   esac
@@ -91,8 +103,10 @@ if [ "$START_CRON" = true ]; then
     echo "缺少 API Key，请提供 Cloudflare API Key"
     exit 2
   fi
-  # 添加定时任务
-  (crontab -l ; echo "*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1") | crontab -
+
+  # 检查定时任务是否已经存在
+  CRON_JOB="*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1"
+  (crontab -l | grep -qF "$CRON_JOB") || (crontab -l ; echo "$CRON_JOB") | crontab -
   echo "定时任务已启动"
 
   # 显示用户输入的所有参数
