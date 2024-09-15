@@ -65,7 +65,7 @@ fi
 # 获取Zone ID
 ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$DNS_NAME" \
      -H "X-Auth-Email: $CF_EMAIL" \
-     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "X-Auth-Key: $CF_API_TOKEN" \
      -H "Content-Type: application/json" | jq -r '.result[0].id')
 
 # 检查Zone ID是否成功获取
@@ -77,7 +77,7 @@ fi
 # 获取DNS记录ID
 RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DNS_RECORD" \
      -H "X-Auth-Email: $CF_EMAIL" \
-     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "X-Auth-Key: $CF_API_TOKEN" \
      -H "Content-Type: application/json" | jq -r '.result[0].id')
 
 # 检查DNS记录ID是否成功获取
@@ -92,7 +92,7 @@ CURRENT_IP=$(curl -s https://ipv4.icanhazip.com)
 # 获取Cloudflare中现有的IP地址
 OLD_IP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
      -H "X-Auth-Email: $CF_EMAIL" \
-     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "X-Auth-Key: $CF_API_TOKEN" \
      -H "Content-Type: application/json" | jq -r '.result.content')
 
 # 如果当前IP与Cloudflare中的IP不同，则更新
@@ -102,7 +102,7 @@ if [ "$CURRENT_IP" != "$OLD_IP" ]; then
   # 更新DNS记录
   RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
      -H "X-Auth-Email: $CF_EMAIL" \
-     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "X-Auth-Key: $CF_API_TOKEN" \
      -H "Content-Type: application/json" \
      --data "{\"type\":\"A\",\"name\":\"$DNS_RECORD\",\"content\":\"$CURRENT_IP\",\"proxied\":false}")
 
