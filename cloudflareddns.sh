@@ -1,184 +1,123 @@
-#!/usr/bin/env bash
-set -o errexit
-set -o nounset
-set -o pipefail
+#!/bin/bash
 
-# 自动安装 cron（仅适用于 Debian/Ubuntu 系统）
-if ! command -v crontab &> /dev/null; then
-    echo "cron 未安装，正在安装..."
-    sudo apt update
-    sudo apt install -y cron
-    sudo systemctl start cron
-    sudo systemctl enable cron
-    echo "cron 安装完成。"
+# 赋予脚本执行权限
+if [ ! -x "$0" ]; then
+    echo "正在为脚本添加执行权限..."
+    chmod +x "$0"
+    echo "执行权限已添加，继续运行脚本..."
 fi
 
-# 默认配置
-CFKEY=
-CFUSER=
-CFZONE_NAME=
-CFRECORD_NAME=
-CFRECORD_TYPE=A
-CFTTL=120
-FORCE=false
-START_CRON=false
+# 函数：提示用户输入Cloudflare API信息
+function input_parameters() {
+    read -p "请输入Cloudflare API令牌: " CF_API_TOKEN
+    read -p "请输入Cloudflare账户邮箱: " CF_EMAIL
+    read -p "请输入你的域名 (例如: example.com): " DNS_NAME
+    read -p "请输入要更新的DNS记录 (例如: www.example.com): " DNS_RECORD
+}
 
-# 获取当前外部 IP 的网址
-WANIPSITE="http://ipv4.icanhazip.com"
-if [ "$CFRECORD_TYPE" = "A" ]; then
-  :
-elif [ "$CFRECORD_TYPE" = "AAAA" ]; then
-  WANIPSITE="http://ipv6.icanhazip.com"
-else
-  echo "$CFRECORD_TYPE 指定无效，请使用 A(用于 IPv4) 或 AAAA(用于 IPv6)"
-  exit 2
-fi
+# 函数：显示当前输入的参数
+function display_parameters() {
+    echo "---------------------------------------"
+    echo "当前输入的参数如下:"
+    echo "Cloudflare API令牌: $CF_API_TOKEN"
+    echo "Cloudflare账户邮箱: $CF_EMAIL"
+    echo "域名: $DNS_NAME"
+    echo "DNS记录: $DNS_RECORD"
+    echo "---------------------------------------"
+}
 
-# 自动修改所有选项
-for i in {1..7}; do
-  case $i in
-    1) 
-        echo "填写 Cloudflare API Key，例如: ad2a20e538dxxxxxxxxxx"
-        read -p "请输入 Cloudflare API Key: " CFKEY 
-        ;;
-    2) 
-        echo "填写 Cloudflare 用户名，例如: example@gmail.com"
-        read -p "请输入 Cloudflare 用户名: " CFUSER 
-        ;;
-    3) 
-        echo "填写区域名，例如: example.com"
-        read -p "请输入区域名: " CFZONE_NAME 
-        ;;
-    4) 
-        echo "填写主机名，例如: www.example.com"
-        read -p "请输入主机名: " CFRECORD_NAME 
-        ;;
-    5) 
-        echo "填写记录类型，A 用于 IPv4 或 AAAA 用于 IPv6（默认: A）"
-        read -p "请输入记录类型 (A 或 AAAA，直接按回车选择默认值 A): " CFRECORD_TYPE
-        CFRECORD_TYPE=${CFRECORD_TYPE:-A}
-        if [ "$CFRECORD_TYPE" != "A" ] && [ "$CFRECORD_TYPE" != "AAAA" ]; then
-            echo "无效的记录类型，请输入 A 或 AAAA"
-            i=$((i-1))  # 无效输入，重新输入
-        fi
-        ;;
-    6) 
-        echo "填写是否强制更新标志，true 或 false（默认: false）"
-        read -p "请输入是否强制更新标志 (true 或 false，直接按回车选择默认值 false): " FORCE
-        FORCE=${FORCE:-false}
-        ;;
-    7) START_CRON=true; break ;; # 跳出循环以开始脚本和定时任务
-  esac
-done
+# 函数：修改参数
+function modify_parameters() {
+    echo "请选择要修改的参数:"
+    echo "1) Cloudflare API令牌"
+    echo "2) Cloudflare账户邮箱"
+    echo "3) 域名"
+    echo "4) DNS记录"
+    echo "5) 不修改，继续运行脚本"
+    read -p "请输入选项 (1-5): " choice
 
-# 循环直到用户提供有效的 API Key
-while [ -z "$CFKEY" ]; do
-  read -p "缺少 API Key，请提供 Cloudflare API Key: " CFKEY
-done
-
-# 循环直到用户提供有效的用户名
-while [ -z "$CFUSER" ]; do
-  read -p "缺少用户名，请提供 Cloudflare 用户名: " CFUSER
-done
-
-# 循环直到用户提供有效的区域名
-while [ -z "$CFZONE_NAME" ]; do
-  read -p "缺少区域名，请提供 Cloudflare 区域名: " CFZONE_NAME
-done
-
-# 循环直到用户提供有效的主机名
-while [ -z "$CFRECORD_NAME" ]; do
-  read -p "缺少主机名，请提供 Cloudflare 主机名: " CFRECORD_NAME
-done
-
-# 如果主机名不是完全合格域名（FQDN）
-if [ "$CFRECORD_NAME" != "$CFZONE_NAME" ] && ! [ -z "${CFRECORD_NAME##*$CFZONE_NAME}" ]; then
-  CFRECORD_NAME="$CFRECORD_NAME.$CFZONE_NAME"
-  echo " => 主机名不是完全合格域名（FQDN），已自动修正为 $CFRECORD_NAME"
-fi
-
-# 如果需要启动定时任务，则调用相应的函数
-if [ "$START_CRON" = true ]; then
-  if [ "$CFKEY" = "" ]; then
-    echo "缺少 API Key，请提供 Cloudflare API Key"
-    exit 2
-  fi
-
-  # 检查定时任务是否已经存在
-  CRON_JOB="*/2 * * * * /root/cloudflareddns.sh >/dev/null 2>&1"
-  (crontab -l | grep -qF "$CRON_JOB") || (crontab -l ; echo "$CRON_JOB") | crontab -
-  echo "定时任务已启动"
-
-  # 显示用户输入的所有参数
-  echo "您输入的参数如下："
-  echo "Cloudflare API Key: $CFKEY"
-  echo "Cloudflare 用户名: $CFUSER"
-  echo "区域名: $CFZONE_NAME"
-  echo "主机名: $CFRECORD_NAME"
-  echo "记录类型: $CFRECORD_TYPE"
-  echo "是否强制更新标志: $FORCE"
-
-  # 提供选项给用户选择执行脚本或修改参数
-  while true; do
-    echo "请选择操作:"
-    echo "1. 运行脚本"
-    echo "2. 修改参数"
-    read -p "请输入选项数字(1-2): " option
-
-    case $option in
-      1) break ;;  # 跳出循环以继续运行脚本
-      2) START_CRON=false; break ;;  # 重置START_CRON为false，跳出循环以继续修改参数
-      *) echo "无效的选项，请输入 1 或 2" ;;
+    case $choice in
+        1) read -p "请输入新的Cloudflare API令牌: " CF_API_TOKEN ;;
+        2) read -p "请输入新的Cloudflare账户邮箱: " CF_EMAIL ;;
+        3) read -p "请输入新的域名 (例如: example.com): " DNS_NAME ;;
+        4) read -p "请输入新的DNS记录 (例如: www.example.com): " DNS_RECORD ;;
+        5) return ;;
+        *) echo "无效选项，请重新选择。" ;;
     esac
-  done
+
+    # 显示修改后的参数
+    display_parameters
+    modify_parameters  # 询问是否继续修改
+}
+
+# 主程序：输入参数
+input_parameters
+
+# 显示输入的参数
+display_parameters
+
+# 询问是否需要修改
+read -p "是否需要修改参数？(y/n): " modify_choice
+if [[ $modify_choice == "y" || $modify_choice == "Y" ]]; then
+    modify_parameters
 fi
 
-# 获取当前和旧的 WAN IP
-WAN_IP=$(curl -s ${WANIPSITE})
-WAN_IP_FILE=$HOME/.cf-wan_ip_$CFRECORD_NAME.txt
-if [ -f $WAN_IP_FILE ]; then
-  OLD_WAN_IP=$(cat $WAN_IP_FILE)
+# 获取Zone ID
+ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$DNS_NAME" \
+     -H "X-Auth-Email: $CF_EMAIL" \
+     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+# 检查Zone ID是否成功获取
+if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" == "null" ]; then
+    echo "无法获取Zone ID，请检查域名或API配置信息。"
+    exit 1
+fi
+
+# 获取DNS记录ID
+RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DNS_RECORD" \
+     -H "X-Auth-Email: $CF_EMAIL" \
+     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+# 检查DNS记录ID是否成功获取
+if [ -z "$RECORD_ID" ] || [ "$RECORD_ID" == "null" ]; then
+    echo "无法获取DNS记录ID，请检查DNS记录是否正确。"
+    exit 1
+fi
+
+# 获取当前的外部IP
+CURRENT_IP=$(curl -s https://ipv4.icanhazip.com)
+
+# 获取Cloudflare中现有的IP地址
+OLD_IP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+     -H "X-Auth-Email: $CF_EMAIL" \
+     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "Content-Type: application/json" | jq -r '.result.content')
+
+# 如果当前IP与Cloudflare中的IP不同，则更新
+if [ "$CURRENT_IP" != "$OLD_IP" ]; then
+  echo "IP地址已改变，正在更新Cloudflare DNS记录..."
+
+  # 更新DNS记录
+  RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+     -H "X-Auth-Email: $CF_EMAIL" \
+     -H "Authorization: Bearer $CF_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     --data "{\"type\":\"A\",\"name\":\"$DNS_RECORD\",\"content\":\"$CURRENT_IP\",\"proxied\":false}")
+
+  # 检查是否更新成功
+  if [[ $RESPONSE == *"\"success\":true"* ]]; then
+    echo "DNS记录更新成功，新IP: $CURRENT_IP"
+  else
+    echo "DNS记录更新失败，响应: $RESPONSE"
+  fi
 else
-  echo "未找到 IP 文件"
-  OLD_WAN_IP=""
+  echo "IP地址未改变，无需更新。"
 fi
 
-# 如果 WAN IP 没有变化且不是强制更新，则退出
-if [ "$WAN_IP" = "$OLD_WAN_IP" ] && [ "$FORCE" = false ]; then
-  echo "WAN IP 没有变化，如需强制更新请设置 -f true"
-  exit 0
-fi
+# 添加定时任务，每2分钟运行一次
+CRON_JOB="*/2 * * * * /root/cloudflare-ddns.sh >> /var/log/cloudflare-ddns.log 2>&1"
+(crontab -l 2>/dev/null | grep -v -F "/root/cloudflare-ddns.sh"; echo "$CRON_JOB") | crontab -
 
-# 获取区域标识符和记录标识符
-ID_FILE=$HOME/.cf-id_$CFRECORD_NAME.txt
-if [ -f $ID_FILE ] && [ $(wc -l $ID_FILE | cut -d " " -f 1) == 4 ] \
-  && [ "$(sed -n '3,1p' "$ID_FILE")" == "$CFZONE_NAME" ] \
-  && [ "$(sed -n '4,1p' "$ID_FILE")" == "$CFRECORD_NAME" ]; then
-    CFZONE_ID=$(sed -n '1,1p' "$ID_FILE")
-    CFRECORD_ID=$(sed -n '2,1p' "$ID_FILE")
-else
-    echo "更新区域标识符和记录标识符"
-    CFZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$CFZONE_NAME" -H "X-Auth-Email: $CFUSER" -H "X-Auth-Key: $CFKEY" -H "Content-Type: application/json" | grep -Po '(?<="id":")[^"]*' | head -1 )
-    CFRECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CFZONE_ID/dns_records?name=$CFRECORD_NAME" -H "X-Auth-Email: $CFUSER" -H "X-Auth-Key: $CFKEY" -H "Content-Type: application/json"  | grep -Po '(?<="id":")[^"]*' | head -1 )
-    echo "$CFZONE_ID" > $ID_FILE
-    echo "$CFRECORD_ID" >> $ID_FILE
-    echo "$CFZONE_NAME" >> $ID_FILE
-    echo "$CFRECORD_NAME" >> $ID_FILE
-fi
-
-# 更新 Cloudflare
-echo "正在更新 DNS 到 $WAN_IP"
-
-RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CFZONE_ID/dns_records/$CFRECORD_ID" \
-  -H "X-Auth-Email: $CFUSER" \
-  -H "X-Auth-Key: $CFKEY" \
-  -H "Content-Type: application/json" \
-  --data "{\"id\":\"$CFZONE_ID\",\"type\":\"$CFRECORD_TYPE\",\"name\":\"$CFRECORD_NAME\",\"content\":\"$WAN_IP\", \"ttl\":$CFTTL}")
-
-if [ "$RESPONSE" != "${RESPONSE%success*}" ] && [ "$(echo $RESPONSE | grep "\"success\":true")" != "" ]; then
-  echo "更新成功！"
-  echo $WAN_IP > $WAN_IP_FILE
-else
-  echo '出错了 :('
-  echo "响应: $RESPONSE"
-fi
+echo "定时任务已设置，每2分钟更新一次。"
