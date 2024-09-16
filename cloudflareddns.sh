@@ -120,7 +120,7 @@ if [ -z "$RECORD_ID" ] || [ "$RECORD_ID" == "null" ]; then
 fi
 
 # 获取当前的外部 IP
-CURRENT_IP=$(curl -s https://ip.sb)
+CURRENT_IP=$(curl -s https://ifconfig.co)
 
 # 获取 Cloudflare 中现有的 IP 地址
 OLD_IP=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
