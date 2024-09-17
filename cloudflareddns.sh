@@ -156,7 +156,7 @@ else
 fi
 
 # 添加定时任务，每 2 分钟运行一次
-CRON_JOB="*/2 * * * * /root/cloudlfareddns.sh >> /var/log/cloudflare-ddns.log 2>&1"
-(crontab -l 2>/dev/null | grep -v -F "/root/cloudlfareddns.sh"; echo "$CRON_JOB") | crontab -
+CRON_JOB="*/2 * * * * /root/cloudflareddns.sh >> /var/log/cloudflare-ddns.log 2>&1"
+(crontab -l 2>/dev/null | grep -v -F "/root/cloudflareddns.sh"; echo "$CRON_JOB") | crontab -
 
 echo "定时任务已设置，每 2 分钟更新一次。"
