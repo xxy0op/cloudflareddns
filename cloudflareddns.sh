@@ -7,6 +7,23 @@ if [ ! -x "$0" ]; then
     echo "执行权限已添加，继续运行脚本..."
 fi
 
+# 检查并安装 jq，如果未安装
+if ! command -v jq &> /dev/null
+then
+    echo "jq 未安装，正在安装..."
+    if [ -f /etc/debian_version ]; then
+        # 如果是 Debian/Ubuntu 系统
+        apt update
+        apt install -y jq
+    elif [ -f /etc/redhat-release ]; then
+        # 如果是 CentOS/Red Hat 系统
+        yum install -y jq
+    else
+        echo "无法确定系统类型，请手动安装 jq。"
+        exit 1
+    fi
+fi
+
 # 配置文件路径
 CONFIG_FILE="/root/cloudflare-ddns-config.txt"
 
